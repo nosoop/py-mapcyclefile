@@ -140,7 +140,7 @@ def import_workshop_collections(mapcycle, collections, api_key, include_tags = [
 	return mapcycle
 
 def is_valid_map_name(map):
-	return not (map.startswith('//') and len(map) > 0)
+	return (not map.startswith('//')) and len(map) > 0
 
 def list_map_prefix_duplicates(map, maplist):
 	# TODO optimize this method and fix
@@ -253,13 +253,11 @@ def main(args):
 		new_mapcycle = import_workshop_collections(mapcycle[:], collections, api_key, include_tags = args.include_tags, exclude_tags = args.exclude_tags)
 	
 	if args.list_duplicates:
-		possible_dupes_dict = list_map_shared_prefixes(mapcycle[:])
-		possible_dupes_dict.update(list_possible_workshop_duplicates(mapcycle[:], args.workshop_dir))
+		possible_dupes_dict = list_map_shared_prefixes(new_mapcycle[:])
+		possible_dupes_dict.update(list_possible_workshop_duplicates(new_mapcycle[:], args.workshop_dir))
 		if len(possible_dupes_dict) > 0:
 			for prefix, dupes in possible_dupes_dict.items():
 				print('- {} has {} potential copies: {}'.format(prefix, len(dupes), dupes))
-	
-	workshop_map_ids = [ map.lstrip('workshop/') for map in new_mapcycle if map.startswith('workshop/') ]
 	
 	# Done processing map modifications -- write it back out if necessary.
 	mapcycle_filename = os.path.basename(args.mapcycle)
@@ -286,11 +284,11 @@ def main(args):
 			print('Made the following changes to {}:'.format(mapcycle_filename))
 		
 		# Output added and removed maps in a clean format.
-		added_maps = [ map for map in diff(new_mapcycle, mapcycle) if len(map) > 0 and not map.startswith('//') ]
+		added_maps = [ map for map in diff(new_mapcycle, mapcycle) if is_valid_map_name(map) ]
 		if len(added_maps) > 0:
 			print('+ {}'.format(added_maps))
 		
-		removed_maps = [ map for map in diff(mapcycle, new_mapcycle) if len(map) > 0 and not map.startswith('//') ]
+		removed_maps = [ map for map in diff(mapcycle, new_mapcycle) if is_valid_map_name(map) ]
 		if len(removed_maps) > 0:
 			print('- {}'.format(removed_maps))
 		
@@ -338,6 +336,7 @@ if __name__ == '__main__':
 	if args.workshop_dir is None and args.mapcycle is not None:
 		args.workshop_dir = arg_resolve_workshop_dir(args.mapcycle)
 		if not args.quiet and args.workshop_dir is not None:
+			# TODO add verbosity level
 			print('Using {} as the workshop directory.'.format(args.workshop_dir))
 	
 	# print(args)
