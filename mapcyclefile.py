@@ -9,7 +9,7 @@ mapcyclefile.py --dry-run -c 454128334 "/path/to/tf/custom/server/cfg/mapcycle.t
 
 Lost?  Just do `mapcycle.py --help` for that nice help file.
 
-Requires python's requests library:
+Requires the requests library:
 `pip3 install requests`
 """
 
@@ -78,6 +78,20 @@ def add_memo(mapcycle, comment):
 	remove_sublist(mapcycle, comment_lines)
 	mapcycle.extend(comment_lines)
 	return mapcycle
+
+def arg_resolve_workshop_dir(mapcyclefile):
+	'''
+	Returns the workshop directory, searching up the directory tree relative to the
+	mapcyclefile for it.
+	'''
+	if mapcyclefile is not None:
+		if '/tf/' in mapcyclefile:
+			tf_directory_parent = mapcyclefile[0:mapcyclefile.rfind('/tf/')]
+			
+			tf_workshop_candidate = tf_directory_parent + '/steamapps/workshop'
+			if os.path.exists(tf_workshop_candidate):
+				return tf_workshop_candidate
+	return None
 
 def import_workshop_collections(mapcycle, collections, api_key, include_tags = [], exclude_tags = []):
 	'''
@@ -300,7 +314,7 @@ if __name__ == '__main__':
 	
 	parser.add_argument('-q', '--quiet', action='store_true', help='does not output informational text if nothing changed')
 	
-	parser.add_argument('--workshop-dir', help='the game\'s workshop directory (e.g., /tf/../steamapps/workshop')
+	parser.add_argument('--workshop-dir', help='the game\'s workshop directory (e.g., /tf/../steamapps/workshop)')
 	parser.add_argument('--list-duplicates', action='store_true', help='list maps that share prefixes (possible duplicates)')
 	
 	parser.add_argument('mapcycle', help='the mapcycle file to be modified')
@@ -320,6 +334,11 @@ if __name__ == '__main__':
 	
 	args.include_tags = args.include_tags or []
 	args.exclude_tags = args.exclude_tags or []
+	
+	if args.workshop_dir is None and args.mapcycle is not None:
+		args.workshop_dir = arg_resolve_workshop_dir(args.mapcycle)
+		if not args.quiet and args.workshop_dir is not None:
+			print('Using {} as the workshop directory.'.format(args.workshop_dir))
 	
 	# print(args)
 	main(args)
