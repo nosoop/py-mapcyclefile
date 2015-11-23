@@ -17,6 +17,7 @@ With this script (running as a scheduled task), updating a mapcycle with worksho
   * Install Python3, if you haven't.  And `pip` for Python3.
   * Also install the `requests` library for Python3:  `pip3 install requests`.
   * Obtain a Steam Web API key from [this page](https://steamcommunity.com/dev/apikey).  Pass it to the application as a command line argument or as the environment variable `$STEAM_API_KEY`.
-2.  Save a copy of this script somewhere (preferably callable from your `~/bin` directory in some way) and launch it.
+  * If you're interested in syncing a collection and you haven't created one yet, sign into Steam and create [a new TF2 collection](https://steamcommunity.com/workshop/editcollection/?appid=440).
+2.  Save a copy of the `mapcyclefile.py` script somewhere and launch it.
 
 Assuming you have shell access to a server, it's preferable to install it there, but it *should* work on any other machine; you just have to copy the config back over.
