@@ -154,7 +154,8 @@ def list_map_prefix_duplicates(map, maplist):
 				for partial_map_name in map_name_sections if len(partial_map_name) > i-1 ]
 		s = set()
 		# I have no idea what I'm doing here, but it works!  ...ish.
-		duplicates = set(map_prefix for map_prefix in prefix_map_names if map_prefix == target_split_map_name or s.add(map_prefix))
+		duplicates = set(map_prefix for map_prefix in prefix_map_names
+				if map_prefix == target_split_map_name or s.add(map_prefix))
 		map_duplicate_prefixes.update(duplicates)
 	
 	if len(map_duplicate_prefixes) > 0:
@@ -213,14 +214,15 @@ def list_possible_workshop_duplicates(mapcycle, workshop_directory):
 		workshop_map_names = {}
 		workshop_map_directory = workshop_directory + '/content/440'
 		workshop_map_ids = [ map.lstrip('workshop/') for map in mapcycle if map.startswith('workshop/') ]
+		
+		# TODO fix for long-name support
 		for i in os.listdir(workshop_map_directory):
 			if i in workshop_map_ids:
 				workshop_map_path = workshop_map_directory + os.sep + i
 				for f in os.listdir(workshop_map_path):
 					workshop_map_names[f.rstrip('.bsp')] = i
 		
-		# TODO check prefix
-		#print([ map for map in workshop_map_names if map in mapcycle ])
+		# TODO make sure this actually works
 		for map, id in workshop_map_names.items():
 			dupes = list_map_prefix_duplicates(map, mapcycle)
 			if len(dupes) > 0:
@@ -228,6 +230,29 @@ def list_possible_workshop_duplicates(mapcycle, workshop_directory):
 		return possible_dupes
 	else:
 		return {}
+
+def get_workshop_displayname(map_id, workshop_directory):
+	workshop_map_directory = workshop_directory + '/content/440'
+	workshop_map_path = workshop_map_directory + '/' + str(map_id)
+	if os.path.exists(workshop_map_path):
+		for f in os.listdir(workshop_map_path):
+			return f.rstrip('.bsp')
+	return None
+
+def resolve_workshop_shortname(workshop_map, workshop_directory):
+	'''
+	Attempts to resolve a shorthand workshop name (e.g. "workshop/454796385") into the full name
+	(e.g. "workshop/koth_octothorpe_classic_beta01.ugc454796385").
+	
+	For this to work, the map must be available in the game's workshop directory.
+	If the map name cannot be resolved, then workshop_map is returned.
+	'''
+	if workshop_map.startswith('workshop/'):
+		map_id = int(workshop_map.lstrip('workshop/'))
+		display_name = get_workshop_displayname(map_id, workshop_directory)
+		if display_name is not None:
+			return 'workshop/{}.ugc{}'.format(display_name, str(map_id))
+	return workshop_map
 
 def get_file_as_lines(filename):
 	'''
@@ -250,7 +275,13 @@ def main(args):
 	new_mapcycle = mapcycle[:]
 	
 	if collections is not None and len(collections) > 0:
-		new_mapcycle = import_workshop_collections(mapcycle[:], collections, api_key, include_tags = args.include_tags, exclude_tags = args.exclude_tags)
+		new_mapcycle = import_workshop_collections(mapcycle[:], collections, api_key, include_tags = args.include_tags,
+				exclude_tags = args.exclude_tags)
+	
+	if args.long_workshop_names and args.workshop_dir is not None:
+		for i, map in enumerate(new_mapcycle):
+			if map.startswith('workshop/'):
+				new_mapcycle[i] = resolve_workshop_shortname(map, args.workshop_dir)
 	
 	if args.list_duplicates:
 		possible_dupes_dict = list_map_shared_prefixes(new_mapcycle[:])
@@ -263,7 +294,8 @@ def main(args):
 	mapcycle_filename = os.path.basename(args.mapcycle)
 	if len(changes(mapcycle, new_mapcycle)) > 0:
 		if args.dry_run:
-			print('{} has not been modified due to being a dry run.  The following changes would have been made:'.format(mapcycle_filename))
+			print( ("{} has not been modified due to being a dry run.  "
+					"The following changes would have been made:").format(mapcycle_filename) )
 		else:
 			if args.backup:
 				# Assumed to be a /cfg/ directory.  Hopefully there's no instances where it's not?
@@ -298,22 +330,32 @@ def main(args):
 			print('No changed workshop maps.  No modification has been made to {}.'.format(mapcycle_filename))
 
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser(description='Modifies Source Engine Dedicated Server mapcycle files.', usage='%(prog)s [options] mapcycle')
+	parser = argparse.ArgumentParser(description='Modifies Source Engine Dedicated Server mapcycle files.',
+			usage='%(prog)s [options] mapcycle')
 	
 	parser.add_argument('--dry-run', action='store_true', help='do not write modified mapcycle back, only display changes')
 	
-	parser.add_argument('--api-key', nargs=1, metavar='KEY', help='a Steam WebAPI key (will fall back to environment\'s STEAM_API_KEY otherwise)')
-	parser.add_argument('-c', '--collection', metavar='ID', action='append', help='a Steam Workshop map collection to retrieve maps from')
+	parser.add_argument('--api-key', nargs=1, metavar='KEY',
+			help='a Steam WebAPI key (will fall back to environment\'s STEAM_API_KEY otherwise)')
+	parser.add_argument('-c', '--collection', metavar='ID', action='append',
+			help='a Steam Workshop map collection to retrieve maps from')
 	
 	parser.add_argument('--backup', action='store_true', help='save a backup copy of the mapcycle on successful change')
 	
-	parser.add_argument('--include-workshop-tag', metavar='TAG', action='append', help='allow workshop entries that contain one or more of these tags', dest='include_tags')
-	parser.add_argument('--exclude-workshop-tag', metavar='TAG', action='append', help='ignore workshop entries that include this tag', dest='exclude_tags')
+	parser.add_argument('--include-workshop-tag', metavar='TAG', action='append',
+			help='allow workshop entries that contain one or more of these tags', dest='include_tags')
+	parser.add_argument('--exclude-workshop-tag', metavar='TAG', action='append',
+			help='ignore workshop entries that include this tag', dest='exclude_tags')
 	
 	parser.add_argument('-q', '--quiet', action='store_true', help='does not output informational text if nothing changed')
 	
-	parser.add_argument('--workshop-dir', help='the game\'s workshop directory (e.g., /tf/../steamapps/workshop)')
+	parser.add_argument('--workshop-dir', metavar='DIR',
+			help=('the game\'s workshop directory (e.g., /tf/../steamapps/workshop);'
+			'will attempt to autodetect based off of input config if not supplied'))
+	
 	parser.add_argument('--list-duplicates', action='store_true', help='list maps that share prefixes (possible duplicates)')
+	
+	parser.add_argument('--long-workshop-names', action='store_true', help='use full workshop map names for downloaded maps')
 	
 	parser.add_argument('mapcycle', help='the mapcycle file to be modified')
 	
@@ -339,5 +381,4 @@ if __name__ == '__main__':
 			# TODO add verbosity level
 			print('Using {} as the workshop directory.'.format(args.workshop_dir))
 	
-	# print(args)
 	main(args)
