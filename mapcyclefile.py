@@ -142,6 +142,9 @@ def import_workshop_collections(mapcycle, collections, api_key, include_tags = [
 def is_valid_map_name(map):
 	return (not map.startswith('//')) and len(map) > 0
 
+def is_workshop_short_name(map):
+	return map.startswith('workshop/') and '.ugc' not in map
+
 def list_map_prefix_duplicates(map, maplist):
 	# TODO optimize this method and fix
 	split_map_name = map.split('_')
@@ -250,7 +253,7 @@ def resolve_workshop_shortname(workshop_map, workshop_directory):
 	Fun fact:  TF2 doesn't seem to care about the long workshop name, as long as the ID is intact.
 	It *should* update to the latest version while tracking.
 	'''
-	if workshop_map.startswith('workshop/'):
+	if is_workshop_short_name(workshop_map):
 		map_id = int(workshop_map.lstrip('workshop/'))
 		display_name = get_workshop_displayname(map_id, workshop_directory)
 		if display_name is not None:
@@ -283,7 +286,7 @@ def main(args):
 	
 	if args.long_workshop_names and args.workshop_dir is not None:
 		for i, map in enumerate(new_mapcycle):
-			if map.startswith('workshop/'):
+			if is_workshop_short_name(map):
 				new_mapcycle[i] = resolve_workshop_shortname(map, args.workshop_dir)
 	
 	if args.list_duplicates:
