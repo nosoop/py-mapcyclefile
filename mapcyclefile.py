@@ -246,6 +246,9 @@ def resolve_workshop_shortname(workshop_map, workshop_directory):
 	
 	For this to work, the map must be available in the game's workshop directory.
 	If the map name cannot be resolved, then workshop_map is returned.
+	
+	Fun fact:  TF2 doesn't seem to care about the long workshop name, as long as the ID is intact.
+	It *should* update to the latest version while tracking.
 	'''
 	if workshop_map.startswith('workshop/'):
 		map_id = int(workshop_map.lstrip('workshop/'))
@@ -289,13 +292,17 @@ def main(args):
 		if len(possible_dupes_dict) > 0:
 			for prefix, dupes in possible_dupes_dict.items():
 				print('- {} has {} potential copies: {}'.format(prefix, len(dupes), dupes))
+			print('')
 	
 	# Done processing map modifications -- write it back out if necessary.
 	mapcycle_filename = os.path.basename(args.mapcycle)
-	if len(changes(mapcycle, new_mapcycle)) > 0:
+	
+	additions = len(diff(new_mapcycle, mapcycle))
+	deletions = len(diff(mapcycle, new_mapcycle))
+	if additions + deletions > 0:
 		if args.dry_run:
 			print( ("{} has not been modified due to being a dry run.  "
-					"The following changes would have been made:").format(mapcycle_filename) )
+					"The following changes (+{}, -{}) would have been made:").format(mapcycle_filename, additions, deletions) )
 		else:
 			if args.backup:
 				# Assumed to be a /cfg/ directory.  Hopefully there's no instances where it's not?
@@ -313,7 +320,7 @@ def main(args):
 			
 			with open(args.mapcycle, 'w') as f:
 				f.writelines( '{}\n'.format(line) for line in new_mapcycle )
-			print('Made the following changes to {}:'.format(mapcycle_filename))
+			print('Made the following changes (+{}, -{}) to {}:'.format(additions, deletions, mapcycle_filename))
 		
 		# Output added and removed maps in a clean format.
 		added_maps = [ map for map in diff(new_mapcycle, mapcycle) if is_valid_map_name(map) ]
