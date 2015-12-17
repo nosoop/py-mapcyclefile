@@ -254,7 +254,7 @@ def get_workshop_displayname(map_id, workshop_directory):
 	workshop_map_path = workshop_map_directory + '/' + str(map_id)
 	if os.path.exists(workshop_map_path):
 		for f in os.listdir(workshop_map_path):
-			return f.rstrip('.bsp')
+			return os.path.splitext(f)[0]
 	return None
 
 def resolve_workshop_shortname(workshop_map, workshop_directory):
