@@ -110,6 +110,7 @@ def import_workshop_collections(mapcycle, collections, api_key, include_tags = [
 	If a map contains a tag listed in exclude_tags, it is not included in the import.
 	If there are any include_tags, then the imported workshop maps must have one of the tags given to be imported.
 	'''
+	
 	try:
 		collectiondetails = get_collection_details(collections, api_key)
 	except ConnectionError:
@@ -295,7 +296,7 @@ def main(args):
 	new_mapcycle = mapcycle[:]
 	
 	if collections is not None and len(collections) > 0:
-		new_mapcycle = import_workshop_collections(mapcycle[:], collections, api_key, include_tags = args.include_tags,
+		new_mapcycle = import_workshop_collections(new_mapcycle[:], collections, api_key, include_tags = args.include_tags,
 				exclude_tags = args.exclude_tags)
 	
 	if args.long_workshop_names and args.workshop_dir is not None:
@@ -381,7 +382,7 @@ if __name__ == '__main__':
 	
 	parser.add_argument('--long-workshop-names', action='store_true', help='use full workshop map names for downloaded maps')
 	
-	parser.add_argument('mapcycle', help='the mapcycle file to be modified')
+	parser.add_argument('mapcycle', help='the mapcycle file to output to')
 	
 	args = parser.parse_args()
 	
@@ -401,8 +402,13 @@ if __name__ == '__main__':
 	
 	if args.workshop_dir is None and args.mapcycle is not None:
 		args.workshop_dir = arg_resolve_workshop_dir(args.mapcycle)
-		if not args.quiet and args.workshop_dir is not None:
+		if not args.quiet:
 			# TODO add verbosity level
-			print('Using {} as the workshop directory.'.format(args.workshop_dir))
+			if args.workshop_dir is not None:
+				print('Using {} as the workshop directory.'.format(args.workshop_dir))
+			elif args.long_workshop_names:
+				print('Ignoring --long-workshop-names as the workshop directory could not be found.')
+	
+	# TODO expand mapcycle using os.path.expanduser
 	
 	main(args)
