@@ -28,9 +28,12 @@ def get_collection_details(collections, api_key):
 	}
 	collection_request.update(param_dict('publishedfileids', collections))
 	
-	r = requests.post("https://api.steampowered.com/ISteamRemoteStorage/GetCollectionDetails/v1/",
-			data = collection_request)
-	return r.json()
+	try:
+		r = requests.post("https://api.steampowered.com/ISteamRemoteStorage/GetCollectionDetails/v1/",
+				data = collection_request)
+		return r.json()
+	except ConnectionError:
+		raise
 
 def get_published_file_details(fileids, api_key):
 	''' Returns the results of a request to Steam's ISteamRemoteStorage/GetPublishedFileDetails API '''
@@ -41,9 +44,12 @@ def get_published_file_details(fileids, api_key):
 	}
 	published_file_details_request.update(param_dict('publishedfileids', fileids))
 	
-	r = requests.post('https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/',
-			data = published_file_details_request)
-	return r.json()
+	try:
+		r = requests.post('https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/',
+				data = published_file_details_request)
+		return r.json()
+	except ConnectionError:
+		raise
 
 def diff(a, b):
 	'''
@@ -104,7 +110,11 @@ def import_workshop_collections(mapcycle, collections, api_key, include_tags = [
 	If a map contains a tag listed in exclude_tags, it is not included in the import.
 	If there are any include_tags, then the imported workshop maps must have one of the tags given to be imported.
 	'''
-	collectiondetails = get_collection_details(collections, api_key)
+	try:
+		collectiondetails = get_collection_details(collections, api_key)
+	except ConnectionError:
+		print("Could not get collection details.  Is Steam down?", file=sys.stderr)
+		sys.exit(1)
 	
 	workshop_map_ids = []
 	
@@ -114,7 +124,11 @@ def import_workshop_collections(mapcycle, collections, api_key, include_tags = [
 			if publishedfile['publishedfileid'] not in workshop_map_ids and publishedfile['filetype'] == 0:
 				workshop_map_ids.append(publishedfile['publishedfileid'])
 	
-	published_file_results = get_published_file_details(workshop_map_ids, api_key)
+	try:
+		published_file_results = get_published_file_details(workshop_map_ids, api_key)
+	except ConnectionError:
+		print("Could not get Workshop map details.  Is Steam down?", file=sys.stderr)
+		sys.exit(1)
 	
 	workshop_map_data = {}
 	
