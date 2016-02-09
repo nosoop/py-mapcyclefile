@@ -135,6 +135,11 @@ def get_workshop_collections(collections, api_key, include_tags = [], exclude_ta
 	workshop_map_data = {}
 	
 	for publishedfile in published_file_results['response']['publishedfiledetails']:
+		# Remove Workshop ID from list if the submission doesn't exist
+		if (publishedfile['result'] == 9):
+			workshop_map_ids.remove(publishedfile['publishedfileid'])
+			continue
+		
 		map_tags = [ tag['tag'] for tag in publishedfile['tags'] ]
 		
 		if any(tag in map_tags for tag in exclude_tags):
