@@ -13,7 +13,7 @@ Requires the requests library:
 `pip3 install requests`
 """
 
-import requests, json, argparse, os, shutil, time, itertools
+import requests, json, argparse, os, shutil, time, itertools, sys
 
 def param_dict(key, values):
 	''' Generates a dict with named keys "key[i]". '''
@@ -32,7 +32,7 @@ def get_collection_details(collections, api_key):
 		r = requests.post("https://api.steampowered.com/ISteamRemoteStorage/GetCollectionDetails/v1/",
 				data = collection_request)
 		return r.json()
-	except ConnectionError:
+	except (requests.exceptions.ConnectionError, ValueError) as e:
 		raise
 
 def get_published_file_details(fileids, api_key):
@@ -48,7 +48,7 @@ def get_published_file_details(fileids, api_key):
 		r = requests.post('https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/',
 				data = published_file_details_request)
 		return r.json()
-	except ConnectionError:
+	except (requests.exceptions.ConnectionError, ValueError) as e:
 		raise
 
 def diff(a, b):
@@ -90,6 +90,7 @@ def arg_resolve_workshop_dir(mapcyclefile):
 	Returns the workshop directory, searching up the directory tree relative to the
 	mapcyclefile for it.
 	'''
+	mapcyclefile = os.path.realpath(mapcyclefile)
 	if mapcyclefile is not None:
 		if '/tf/' in mapcyclefile:
 			tf_directory_parent = mapcyclefile[0:mapcyclefile.rfind('/tf/')]
@@ -99,27 +100,27 @@ def arg_resolve_workshop_dir(mapcyclefile):
 				return tf_workshop_candidate
 	return None
 
-def import_workshop_collections(mapcycle, collections, api_key, include_tags = [], exclude_tags = []):
+def get_workshop_collections(collections, api_key, include_tags = [], exclude_tags = []):
 	'''
-	Takes a bunch of maps in collections and adds them to a mapcycle, filtering them depending
-	on include_tags and exclude_tags.
-	
-	Existing workshop maps are removed (we assume only the maps in the collections should be
-	added), so ensure that this is only run once.
+	Returns a unique list of maps available in the provided Steam Workshop map collections,
+	filtered based on include_tags and exclude_tags.
 	
 	If a map contains a tag listed in exclude_tags, it is not included in the import.
 	If there are any include_tags, then the imported workshop maps must have one of the tags given to be imported.
 	'''
-	
 	try:
 		collectiondetails = get_collection_details(collections, api_key)
-	except ConnectionError:
+	except (requests.exceptions.ConnectionError, ValueError):
 		print("Could not get collection details.  Is Steam down?", file=sys.stderr)
 		sys.exit(1)
 	
 	workshop_map_ids = []
 	
 	for collection in collectiondetails['response']['collectiondetails']:
+		if not 'children' in collection:
+			print("Collection looks empty.  Is the collection published?", file=sys.stderr)
+			sys.exit(1)
+		
 		for publishedfile in collection['children']:
 			# filetype = 0 is map?
 			if publishedfile['publishedfileid'] not in workshop_map_ids and publishedfile['filetype'] == 0:
@@ -127,7 +128,7 @@ def import_workshop_collections(mapcycle, collections, api_key, include_tags = [
 	
 	try:
 		published_file_results = get_published_file_details(workshop_map_ids, api_key)
-	except ConnectionError:
+	except (requests.exceptions.ConnectionError, ValueError):
 		print("Could not get Workshop map details.  Is Steam down?", file=sys.stderr)
 		sys.exit(1)
 	
@@ -140,9 +141,22 @@ def import_workshop_collections(mapcycle, collections, api_key, include_tags = [
 			workshop_map_ids.remove(publishedfile['publishedfileid'])
 		elif len(include_tags) > 0 and not any(tag in map_tags for tag in include_tags):
 			workshop_map_ids.remove(publishedfile['publishedfileid'])
-		
 	
-	workshop_maps = [ 'workshop/{0}'.format(map) for map in workshop_map_ids ]
+	return [ 'workshop/{0}'.format(map) for map in workshop_map_ids ]
+
+def replace_workshop_collections(mapcycle, collections, api_key, include_tags = [], exclude_tags = []):
+	'''
+	Takes a bunch of maps in collections and adds them to a mapcycle, filtering them depending
+	on include_tags and exclude_tags.
+	
+	Existing workshop maps are removed (we assume only the maps in the collections should be
+	added), so ensure that this is only run once.
+	
+	If a map contains a tag listed in exclude_tags, it is not included in the import.
+	If there are any include_tags, then the imported workshop maps must have one of the tags given to be imported.
+	'''
+	workshop_maps = get_workshop_collections(collections, api_key, include_tags, exclude_tags)
+	
 	existing_workshop_maps = [ map for map in mapcycle if map.startswith('workshop/') ]
 	
 	# Check if the list of workshop maps is different
@@ -293,11 +307,25 @@ def main(args):
 	api_key = args.api_key
 	
 	mapcycle = get_file_as_lines(args.mapcycle)
-	new_mapcycle = mapcycle[:]
 	
-	if collections is not None and len(collections) > 0:
-		new_mapcycle = import_workshop_collections(new_mapcycle[:], collections, api_key, include_tags = args.include_tags,
-				exclude_tags = args.exclude_tags)
+	if len(args.import_mapcycle) == 0:
+		new_mapcycle = mapcycle[:]
+		if collections is not None and len(collections) > 0:
+			new_mapcycle = replace_workshop_collections(new_mapcycle[:], collections, api_key, include_tags = args.include_tags,
+					exclude_tags = args.exclude_tags)
+	else:
+		map_set = set()
+		for mapcycle_file in args.import_mapcycle:
+			# TODO resolve pathname
+			map_set.update(get_file_as_lines(mapcycle_file))
+		
+		if collections is not None and len(collections) > 0:
+			workshop_maps = get_workshop_collections(collections, api_key, include_tags = args.include_tags,
+					exclude_tags = args.exclude_tags)
+			map_set.update(workshop_maps)
+		
+		new_mapcycle = [ map for map in map_set if is_valid_map_name(map) ]
+		new_mapcycle.sort()
 	
 	if args.long_workshop_names and args.workshop_dir is not None:
 		for i, map in enumerate(new_mapcycle):
@@ -315,6 +343,7 @@ def main(args):
 	# Done processing map modifications -- write it back out if necessary.
 	mapcycle_filename = os.path.basename(args.mapcycle)
 	
+	# n.b. diffs include lines that aren't maps
 	additions = len(diff(new_mapcycle, mapcycle))
 	deletions = len(diff(mapcycle, new_mapcycle))
 	if additions + deletions > 0:
@@ -365,6 +394,9 @@ if __name__ == '__main__':
 	parser.add_argument('-c', '--collection', metavar='ID', action='append',
 			help='a Steam Workshop map collection to retrieve maps from')
 	
+	parser.add_argument('-i', '--import-mapcycle', metavar='MAPCYCLE', action='append',
+			help='a mapcycle file to import maps from (note: using this will overwrite the mapcycle\'s original contents)')
+	
 	parser.add_argument('--backup', action='store_true', help='save a backup copy of the mapcycle on successful change')
 	
 	parser.add_argument('--include-workshop-tag', metavar='TAG', action='append',
@@ -382,6 +414,9 @@ if __name__ == '__main__':
 	
 	parser.add_argument('--long-workshop-names', action='store_true', help='use full workshop map names for downloaded maps')
 	
+	# TODO add support for search paths
+	# TODO add "--remove-missing" to remove maps that don't have a matching BSP file (ignore shorthand workshop names though)
+	
 	parser.add_argument('mapcycle', help='the mapcycle file to output to')
 	
 	args = parser.parse_args()
@@ -397,8 +432,11 @@ if __name__ == '__main__':
 		if args.quiet:
 			print('Ignoring --quiet flag as we are doing a dry run.')
 	
+	args.import_mapcycle = args.import_mapcycle or []
 	args.include_tags = args.include_tags or []
 	args.exclude_tags = args.exclude_tags or []
+	
+	args.import_mapcycle = [ os.path.realpath(file) for file in args.import_mapcycle if os.path.exists(file) ]
 	
 	if args.workshop_dir is None and args.mapcycle is not None:
 		args.workshop_dir = arg_resolve_workshop_dir(args.mapcycle)
