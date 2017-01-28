@@ -1,4 +1,14 @@
 # py-mapcyclefile
+
+(Note:  While it's probably still usable, I effectively stopped maintaining this script.)
+
+To be more in line with UNIX philosophy, I wrote a "replacement" utility that only serves the purpose of dumping Workshop map information to standard output.  It's meant to be chained with other tools instead of an all-in-one system.
+
+[The script is available as a gist here.](https://gist.github.com/nosoop/6f8065df2aa81573ab8ba7d2cee65a86)
+
+----
+## About
+
 A utility to modify and check SRCDS mapcycle files.  (Mainly written for TF2.)
 
 It gets tedious to look for a workshop map, take reference of its ID, then add / remove it from whichever mapcycles you are looking to modify.  CS:GO has `host_workshop_collection`.  TF2 doesn't really have any native equivalent.
